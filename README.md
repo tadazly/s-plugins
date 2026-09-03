@@ -1,6 +1,6 @@
 # S Plugins
 
-面向 Agent 的插件集合。目前仅发布 **Codex Plugins**。
+面向 Agents 的插件集合。
 
 ## 安装与使用
 
