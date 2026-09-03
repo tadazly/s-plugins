@@ -1,0 +1,61 @@
+name: Update plugin marketplace
+
+on:
+  repository_dispatch:
+    types:
+      - plugin-released
+
+concurrency:
+  group: update-plugin-marketplace
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    env:
+      PLUGIN_NAME: ${{ github.event.client_payload.name }}
+      PLUGIN_URL: ${{ github.event.client_payload.url }}
+      PLUGIN_PATH: ${{ github.event.client_payload.path }}
+      PLUGIN_REF: ${{ github.event.client_payload.ref }}
+      PLUGIN_CATEGORY: ${{ github.event.client_payload.category || 'Productivity' }}
+
+    steps:
+      - name: Check out marketplace
+        uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Update marketplace entry
+        shell: bash
+        run: >-
+          python scripts/update_marketplace.py
+          --name "$PLUGIN_NAME"
+          --url "$PLUGIN_URL"
+          --path "$PLUGIN_PATH"
+          --ref "$PLUGIN_REF"
+          --category "$PLUGIN_CATEGORY"
+
+      - name: Validate marketplace
+        run: python scripts/validate_repo.py
+
+      - name: Commit directly to main
+        shell: bash
+        run: |
+          if git diff --quiet -- .agents/plugins/marketplace.json; then
+            echo "Marketplace already references ${PLUGIN_NAME}@${PLUGIN_REF}."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .agents/plugins/marketplace.json
+          git commit -m "chore(marketplace): update ${PLUGIN_NAME} to ${PLUGIN_REF}"
+          git push origin HEAD:main
+

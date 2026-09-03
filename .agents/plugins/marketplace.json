@@ -1,0 +1,8 @@
+{
+  "name": "s-plugins",
+  "interface": {
+    "displayName": "S Plugins"
+  },
+  "plugins": []
+}
+
