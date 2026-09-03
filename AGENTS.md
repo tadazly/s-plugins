@@ -14,11 +14,15 @@
 - 仅当对应文件真实存在时，才在 manifest 中声明 `skills`、`mcpServers` 或 `apps`。
 - 新增、删除或重命名本地插件时，同步更新 `.agents/plugins/marketplace.json`。
 - marketplace 新条目默认使用 `AVAILABLE`、`ON_INSTALL` 和与插件用途匹配的 `category`；不要无依据添加 `policy.products`。
-- `plugin-released` repository dispatch 表示上游已完成发布验收；接收端只进行 payload 和 marketplace 静态校验，然后直接更新 `main`，不重复构建或验收上游插件。
+- 每个 marketplace 插件条目都应包含 `version`、`description` 和完整 `interface` 展示字段；它们同时用于 Codex 安装前展示和 README 插件目录，不另建重复元数据文件。
+- 不手工编辑 README 的“插件目录”章节；使用 `scripts/sync_readme.py` 从 marketplace 生成。生成区以 Markdown 二级标题定位，不使用可见标记。
+- `plugin-released` repository dispatch 表示上游已完成发布验收；首次登记必须提供完整来源和展示元数据，后续通知以 `name` 定位，以 `version` 和 `source.ref` 更新版本，并仅覆盖明确传入的展示字段。
+- 接收端只进行 payload、marketplace 和 README 静态校验，然后直接更新 `main`，不重复构建或验收上游插件。
 
 ## 文档与验证
 
 - 项目文档默认使用简体中文；技术术语、代码标识符和专有名词保留原文。
 - 提交前运行 `python scripts/validate_repo.py`。
+- 修改 marketplace 后运行 `python scripts/sync_readme.py`。
 - 对单个插件的变更，还应使用 Codex 的 `plugin-creator` validator 做插件级校验。
 - 不提交凭据、访问令牌、私有 endpoint 或本地绝对路径。

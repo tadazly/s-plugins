@@ -13,7 +13,10 @@ from urllib.parse import urlparse
 
 ROOT = Path(__file__).resolve().parents[1]
 MARKETPLACE_PATH = ROOT / ".agents" / "plugins" / "marketplace.json"
+README_PATH = ROOT / "README.md"
 PLUGINS_PATH = ROOT / "plugins"
+CATALOG_HEADING = "## 插件目录"
+CATALOG_SECTION_RE = re.compile(r"(?ms)^## 插件目录[^\n]*\n.*?(?=^## |\Z)")
 PLUGIN_NAME_RE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 SEMVER_RE = re.compile(
     r"^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)"
@@ -43,6 +46,8 @@ def non_empty_string(value: Any) -> bool:
 def valid_https_url(value: Any) -> bool:
     if not non_empty_string(value):
         return False
+    if any(character.isspace() or character in "<>\\" for character in value):
+        return False
     parsed = urlparse(value)
     return (
         parsed.scheme == "https"
@@ -70,6 +75,103 @@ def valid_git_ref(value: Any) -> bool:
         and not value.endswith("/")
         and not value.endswith(".lock")
     )
+
+
+def escape_markdown_text(value: str) -> str:
+    return (
+        value.replace("&", "&amp;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+        .replace("\\", "\\\\")
+        .replace("|", "\\|")
+        .replace("[", "\\[")
+        .replace("]", "\\]")
+        .replace("`", "\\`")
+        .replace("\r", " ")
+        .replace("\n", " ")
+    )
+
+
+def render_plugin_catalog(marketplace: dict[str, object]) -> str:
+    rows = [
+        CATALOG_HEADING,
+        "",
+        "| 插件 | 简介 |",
+        "| --- | --- |",
+    ]
+    entries = marketplace.get("plugins", [])
+    if isinstance(entries, list):
+        for entry in entries:
+            if not isinstance(entry, dict):
+                continue
+            name = entry.get("name")
+            interface = entry.get("interface")
+            if not isinstance(interface, dict):
+                continue
+            display_name = interface.get("displayName")
+            short_description = interface.get("shortDescription")
+            website_url = interface.get("websiteURL")
+            if not all(
+                isinstance(value, str)
+                for value in (
+                    name,
+                    display_name,
+                    short_description,
+                    website_url,
+                )
+            ):
+                continue
+            label = escape_markdown_text(display_name)
+            summary = escape_markdown_text(short_description)
+            rows.append(f"| [{label}](<{website_url}>) | {summary} |")
+    return "\n".join(rows)
+
+
+def replace_plugin_catalog(readme: str, rendered_catalog: str) -> str:
+    matches = list(CATALOG_SECTION_RE.finditer(readme))
+    if len(matches) != 1:
+        raise ValueError("README must contain exactly one plugin catalog section")
+    match = matches[0]
+    replacement = rendered_catalog.rstrip() + "\n\n"
+    return readme[: match.start()] + replacement + readme[match.end() :]
+
+
+def validate_plugin_display_metadata(
+    entry: dict[str, object], label: str, errors: list[str]
+) -> None:
+    version = entry.get("version")
+    if not non_empty_string(version) or SEMVER_RE.fullmatch(version) is None:
+        errors.append(f"{label}: version must use strict semver")
+    description = entry.get("description")
+    if not non_empty_string(description) or len(description) > 500:
+        errors.append(f"{label}: description must contain 1 to 500 characters")
+
+    interface = entry.get("interface")
+    if not isinstance(interface, dict):
+        errors.append(f"{label}: interface must be an object")
+        return
+    limits = {
+        "displayName": 80,
+        "shortDescription": 240,
+        "longDescription": 1000,
+        "developerName": 80,
+    }
+    for field, limit in limits.items():
+        value = interface.get(field)
+        if not non_empty_string(value) or len(value) > limit:
+            errors.append(f"{label}: interface.{field} must contain 1 to {limit} characters")
+    if not valid_https_url(interface.get("websiteURL")):
+        errors.append(f"{label}: interface.websiteURL must be a safe HTTPS URL")
+
+
+def validate_readme_catalog(marketplace: dict[str, object], errors: list[str]) -> None:
+    try:
+        readme = README_PATH.read_text(encoding="utf-8")
+        expected = replace_plugin_catalog(readme, render_plugin_catalog(marketplace))
+        if expected != readme:
+            errors.append("README plugin catalog is stale; run scripts/sync_readme.py")
+    except (OSError, ValueError) as error:
+        errors.append(f"cannot validate README plugin catalog: {error}")
 
 
 def validate_manifest(plugin_name: str, manifest_path: Path, errors: list[str]) -> None:
@@ -205,6 +307,7 @@ def validate() -> list[str]:
                 errors.append(f"{label}: invalid policy.authentication")
         if not non_empty_string(entry.get("category")):
             errors.append(f"{label}: category must be a non-empty string")
+        validate_plugin_display_metadata(entry, label, errors)
 
         if source_type == "local":
             plugin_root = PLUGINS_PATH / name
@@ -224,6 +327,8 @@ def validate() -> list[str]:
     }
     for name in sorted(actual_names - listed_names):
         errors.append(f"plugins/{name}: plugin directory is missing from marketplace.json")
+
+    validate_readme_catalog(marketplace, errors)
 
     return errors
 

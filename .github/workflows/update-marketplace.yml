@@ -17,10 +17,16 @@ jobs:
     runs-on: ubuntu-latest
     env:
       PLUGIN_NAME: ${{ github.event.client_payload.name }}
-      PLUGIN_URL: ${{ github.event.client_payload.url }}
-      PLUGIN_PATH: ${{ github.event.client_payload.path }}
-      PLUGIN_REF: ${{ github.event.client_payload.ref }}
-      PLUGIN_CATEGORY: ${{ github.event.client_payload.category || 'Productivity' }}
+      PLUGIN_VERSION: ${{ github.event.client_payload.version }}
+      PLUGIN_DESCRIPTION: ${{ github.event.client_payload.description }}
+      PLUGIN_URL: ${{ github.event.client_payload.source.url }}
+      PLUGIN_PATH: ${{ github.event.client_payload.source.path }}
+      PLUGIN_REF: ${{ github.event.client_payload.source.ref }}
+      PLUGIN_DISPLAY_NAME: ${{ github.event.client_payload.interface.displayName }}
+      PLUGIN_SHORT_DESCRIPTION: ${{ github.event.client_payload.interface.shortDescription }}
+      PLUGIN_LONG_DESCRIPTION: ${{ github.event.client_payload.interface.longDescription }}
+      PLUGIN_DEVELOPER_NAME: ${{ github.event.client_payload.interface.developerName }}
+      PLUGIN_WEBSITE_URL: ${{ github.event.client_payload.interface.websiteURL }}
 
     steps:
       - name: Check out marketplace
@@ -38,10 +44,16 @@ jobs:
         run: >-
           python scripts/update_marketplace.py
           --name "$PLUGIN_NAME"
+          --version "$PLUGIN_VERSION"
+          --description "$PLUGIN_DESCRIPTION"
           --url "$PLUGIN_URL"
           --path "$PLUGIN_PATH"
           --ref "$PLUGIN_REF"
-          --category "$PLUGIN_CATEGORY"
+          --display-name "$PLUGIN_DISPLAY_NAME"
+          --short-description "$PLUGIN_SHORT_DESCRIPTION"
+          --long-description "$PLUGIN_LONG_DESCRIPTION"
+          --developer-name "$PLUGIN_DEVELOPER_NAME"
+          --website-url "$PLUGIN_WEBSITE_URL"
 
       - name: Validate marketplace
         run: python scripts/validate_repo.py
@@ -49,13 +61,16 @@ jobs:
       - name: Commit directly to main
         shell: bash
         run: |
-          if git diff --quiet -- .agents/plugins/marketplace.json; then
-            echo "Marketplace already references ${PLUGIN_NAME}@${PLUGIN_REF}."
+          if git diff --quiet -- \
+            .agents/plugins/marketplace.json \
+            README.md; then
+            echo "Marketplace already references ${PLUGIN_NAME}@${PLUGIN_VERSION} (${PLUGIN_REF})."
             exit 0
           fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add .agents/plugins/marketplace.json
-          git commit -m "chore(marketplace): update ${PLUGIN_NAME} to ${PLUGIN_REF}"
+          git add \
+            .agents/plugins/marketplace.json \
+            README.md
+          git commit -m "chore(marketplace): update ${PLUGIN_NAME} to ${PLUGIN_VERSION}"
           git push origin HEAD:main
-
