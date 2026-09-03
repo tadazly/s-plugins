@@ -3,6 +3,20 @@
   "interface": {
     "displayName": "S Plugins"
   },
-  "plugins": []
+  "plugins": [
+    {
+      "name": "design-rag",
+      "source": {
+        "source": "git-subdir",
+        "url": "https://github.com/tadazly/design-rag.git",
+        "path": "./plugins/design-rag",
+        "ref": "v0.3.0"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    }
+  ]
 }
-
