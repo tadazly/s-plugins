@@ -18,7 +18,7 @@
 
 3. 返回插件页，点击 **个人**，从 **S Plugins** 中选择要安装的插件。
 
-   <img src="docs/assets/codex-desktop/plugin-add-plugin.png" alt="选择要安装的插件" width="460">
+   <img src="docs/assets/codex-desktop/plugin-add-plugin.png" alt="选择要安装的插件" width="400">
 
 4. 新建 Codex 任务后直接描述需求；需要明确指定时，可输入 `@` 选择插件或 Skill。
 
