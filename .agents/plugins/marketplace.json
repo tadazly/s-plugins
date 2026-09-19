@@ -26,6 +26,29 @@
         "developerName": "tadazly",
         "websiteURL": "https://github.com/tadazly/design-rag"
       }
+    },
+    {
+      "name": "egret-agent-inspector",
+      "version": "3.2.0",
+      "description": "读取和操作浏览器中 Egret 游戏的显示对象，支持 agent 驱动的 E2E 测试",
+      "source": {
+        "source": "git-subdir",
+        "url": "https://github.com/tadazly/egret-agent-inspector.git",
+        "path": "./plugins/egret-agent-inspector",
+        "ref": "v3.2.0"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity",
+      "interface": {
+        "displayName": "Egret Agent Inspector",
+        "shortDescription": "查询、操作和测试浏览器中的 Egret 游戏",
+        "longDescription": "通过浏览器扩展读取 Egret 显示对象树，按 id、name、类名或文本定位组件，执行点击、拖动、等待、断言和截图，并可批量运行可复现的 E2E 用例。首次使用时引导安装浏览器扩展。",
+        "developerName": "tadazly",
+        "websiteURL": "https://github.com/tadazly/egret-agent-inspector"
+      }
     }
   ]
 }

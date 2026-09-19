@@ -36,6 +36,7 @@ codex plugin marketplace list
 | 插件 | 简介 |
 | --- | --- |
 | [DRAG 游戏策划知识库](<https://github.com/tadazly/design-rag>) | 检索本地策划案、配表和历史版本 |
+| [Egret Agent Inspector](<https://github.com/tadazly/egret-agent-inspector>) | 查询、操作和测试浏览器中的 Egret 游戏 |
 
 ## 发布插件
 
