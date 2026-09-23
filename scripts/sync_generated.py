@@ -1,31 +1,35 @@
 #!/usr/bin/env python3
-"""Regenerate the Claude Code marketplace and README plugin catalog."""
+"""Regenerate the Claude Code / WorkBuddy marketplaces and README plugin catalog."""
 
 from __future__ import annotations
 
+import argparse
 import json
 
 from validate_repo import (
-    CLAUDE_MARKETPLACE_PATH,
     MARKETPLACE_PATH,
-    README_PATH,
     ROOT,
-    dump_json,
-    render_claude_marketplace,
-    render_plugin_catalog,
-    replace_plugin_catalog,
+    generated_paths,
+    render_generated_files,
     write_text_if_changed,
 )
 
 
 def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--list-outputs",
+        action="store_true",
+        help="print the generated file paths, one per line, and exit",
+    )
+    args = parser.parse_args()
+    if args.list_outputs:
+        for path in generated_paths(ROOT):
+            print(path.relative_to(ROOT).as_posix())
+        return 0
+
     marketplace = json.loads(MARKETPLACE_PATH.read_text(encoding="utf-8"))
-    readme = README_PATH.read_text(encoding="utf-8")
-    outputs = {
-        CLAUDE_MARKETPLACE_PATH: dump_json(render_claude_marketplace(marketplace)),
-        README_PATH: replace_plugin_catalog(readme, render_plugin_catalog(marketplace)),
-    }
-    for path, content in outputs.items():
+    for path, content in render_generated_files(ROOT, marketplace).items():
         state = "updated" if write_text_if_changed(path, content) else "already current"
         print(f"{path.relative_to(ROOT).as_posix()}: {state}.")
     return 0

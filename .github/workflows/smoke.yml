@@ -1,0 +1,56 @@
+name: Claude Code install smoke test
+
+# Installs every plugin with the real Claude Code CLI to catch unresolvable
+# sources (missing tags, wrong paths, broken manifests). It only reports and
+# never blocks marketplace updates.
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 3 * * 1"
+  workflow_run:
+    workflows:
+      - Update plugin marketplace
+    types:
+      - completed
+  push:
+    branches:
+      - main
+    paths:
+      - .agents/plugins/marketplace.json
+      - .claude-plugin/marketplace.json
+      - .github/workflows/smoke.yml
+
+permissions:
+  contents: read
+
+jobs:
+  claude:
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    env:
+      DISABLE_AUTOUPDATER: "1"
+    steps:
+      - name: Check out marketplace
+        uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install Claude Code
+        run: npm install --global @anthropic-ai/claude-code
+
+      - name: Validate Claude Code marketplace
+        run: claude plugin validate --strict .
+
+      - name: Install every plugin
+        shell: bash
+        run: |
+          claude plugin marketplace add "$GITHUB_WORKSPACE"
+          for plugin in $(jq -r '.plugins[].name' .claude-plugin/marketplace.json); do
+            claude plugin install "${plugin}@s-plugins"
+            claude plugin details "${plugin}@s-plugins"
+          done

@@ -2,9 +2,9 @@
 
 ## 项目定位
 
-- 本仓库用于维护可分发的 Agent Plugins，同时提供 Codex 与 Claude Code 两个插件市场。
-- `.agents/plugins/marketplace.json`（Codex）是唯一数据源；`.claude-plugin/marketplace.json`（Claude Code）和 README 插件目录由脚本生成。
-- 未经明确要求，不添加 Codex 与 Claude Code 以外平台的兼容层、manifest 或发布流程。
+- 本仓库用于维护可分发的 Agent Plugins，同时提供 Codex、Claude Code 与 WorkBuddy 三个插件市场。
+- `.agents/plugins/marketplace.json`（Codex）是唯一数据源；`.claude-plugin/marketplace.json`（Claude Code）、`.codebuddy-plugin/marketplace.json`（WorkBuddy / CodeBuddy）和 README 插件目录由脚本生成。
+- 未经明确要求，不添加以上三端以外平台的兼容层、manifest 或发布流程；新增平台时在 `scripts/validate_repo.py` 的 `GENERATED_MARKETPLACES` 中登记生成函数。
 
 ## Codex Plugin 约定
 
@@ -20,12 +20,13 @@
 - `plugin-released` repository dispatch 表示上游已完成发布验收；首次登记必须提供完整来源和展示元数据，后续通知以 `name` 定位，以 `version` 和 `source.ref` 更新版本，并仅覆盖明确传入的展示字段。
 - 接收端只进行 payload、marketplace 和 README 静态校验，然后直接更新 `main`，不重复构建或验收上游插件。
 
-## Claude Code 约定
+## Claude Code 与 WorkBuddy 约定
 
-- 不手工编辑 `.claude-plugin/marketplace.json`；它由 `scripts/sync_generated.py` 和 `scripts/update_marketplace.py` 从 Codex marketplace 生成，`scripts/validate_repo.py` 会拒绝漂移。
-- 生成结果只包含 Claude Code schema 支持的字段，不写入 `policy`、`interface` 等 Codex 专属字段；映射规则集中在 `scripts/validate_repo.py` 的 `render_claude_marketplace`。
-- Claude Code 的 `git-subdir` `path` 不带 `./` 前缀；`policy.installation` 为 `NOT_AVAILABLE` 的插件不列出。
-- 插件支持 Claude Code 时，在插件根目录提供 `.claude-plugin/plugin.json`，其 `name`、`version` 与 Codex manifest 一致；MCP 要求见 README“支持 Claude Code”。
+- 不手工编辑 `.claude-plugin/marketplace.json` 和 `.codebuddy-plugin/marketplace.json`；它们由 `scripts/sync_generated.py` 和 `scripts/update_marketplace.py` 从 Codex marketplace 生成，`scripts/validate_repo.py` 会拒绝漂移。
+- 生成结果只包含各平台 schema 支持的字段，不写入 `policy`、`interface` 等 Codex 专属字段；映射规则集中在 `scripts/validate_repo.py` 的 `render_claude_marketplace` 与 `render_codebuddy_marketplace`。WorkBuddy 清单只写 CodeBuddy 文档列出的字段。
+- `git-subdir` 的 `path` 在两端都不带 `./` 前缀；`policy.installation` 为 `NOT_AVAILABLE` 的插件不列出。
+- 插件在根目录提供 `.claude-plugin/plugin.json`（Claude Code 与 WorkBuddy 共用），其 `name`、`version` 与 Codex manifest 一致；MCP 要求见 README“支持 Claude Code 与 WorkBuddy”。
+- WorkBuddy 端尚未验收；未经验证不要在文档中声称其可用。
 
 ## 文档与验证
 

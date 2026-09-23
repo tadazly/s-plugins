@@ -1,0 +1,41 @@
+{
+  "name": "s-plugins",
+  "owner": {
+    "name": "tadazly"
+  },
+  "description": "S Plugins",
+  "plugins": [
+    {
+      "name": "design-rag",
+      "description": "DRAG 本地游戏策划案与配置表检索、分析和索引管理工具",
+      "version": "0.3.3",
+      "author": {
+        "name": "tadazly"
+      },
+      "homepage": "https://github.com/tadazly/design-rag",
+      "category": "productivity",
+      "source": {
+        "source": "git-subdir",
+        "url": "https://github.com/tadazly/design-rag.git",
+        "path": "plugins/design-rag",
+        "ref": "v0.3.3"
+      }
+    },
+    {
+      "name": "egret-agent-inspector",
+      "description": "读取和操作浏览器中 Egret 游戏的显示对象，支持 agent 驱动的 E2E 测试",
+      "version": "5.0.0",
+      "author": {
+        "name": "tadazly"
+      },
+      "homepage": "https://github.com/tadazly/egret-agent-inspector",
+      "category": "productivity",
+      "source": {
+        "source": "git-subdir",
+        "url": "https://github.com/tadazly/egret-agent-inspector.git",
+        "path": "plugins/egret-agent-inspector",
+        "ref": "v5.0.0"
+      }
+    }
+  ]
+}

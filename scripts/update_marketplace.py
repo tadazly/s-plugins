@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Apply a trusted plugin release notification to both marketplaces and README."""
+"""Apply a trusted plugin release notification to every marketplace and README."""
 
 from __future__ import annotations
 
@@ -8,16 +8,13 @@ import json
 from pathlib import Path
 
 from validate_repo import (
-    CLAUDE_MARKETPLACE_PATH,
-    MARKETPLACE_PATH,
+    MARKETPLACE_FILE,
     PLUGIN_NAME_RE,
-    README_PATH,
+    ROOT,
     SEMVER_RE,
     dump_json,
     non_empty_string,
-    render_claude_marketplace,
-    render_plugin_catalog,
-    replace_plugin_catalog,
+    render_generated_files,
     valid_git_ref,
     valid_https_url,
     valid_relative_plugin_path,
@@ -50,9 +47,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--long-description")
     parser.add_argument("--developer-name")
     parser.add_argument("--website-url")
-    parser.add_argument("--marketplace", type=Path, default=MARKETPLACE_PATH)
-    parser.add_argument("--claude-marketplace", type=Path, default=CLAUDE_MARKETPLACE_PATH)
-    parser.add_argument("--readme", type=Path, default=README_PATH)
+    parser.add_argument("--root", type=Path, default=ROOT)
     return parser.parse_args()
 
 
@@ -184,16 +179,14 @@ def load_object(path: Path, label: str) -> dict[str, object]:
 
 
 def update_repository(args: argparse.Namespace) -> bool:
-    marketplace_path = args.marketplace.resolve()
-    readme_path = args.readme.resolve()
+    root = args.root.resolve()
+    marketplace_path = root / MARKETPLACE_FILE
     marketplace = load_object(marketplace_path, "marketplace.json")
-    readme = readme_path.read_text(encoding="utf-8")
 
     upsert_release(marketplace, args)
     outputs = {
         marketplace_path: dump_json(marketplace),
-        args.claude_marketplace.resolve(): dump_json(render_claude_marketplace(marketplace)),
-        readme_path: replace_plugin_catalog(readme, render_plugin_catalog(marketplace)),
+        **render_generated_files(root, marketplace),
     }
     written = [write_text_if_changed(path, content) for path, content in outputs.items()]
     return any(written)

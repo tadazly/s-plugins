@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """Validate the plugin marketplaces, derived files and local plugin packages.
 
-The Codex marketplace is the single source of truth; the Claude Code
-marketplace and the README plugin catalog are generated from it.
+The Codex marketplace is the single source of truth; the Claude Code and
+WorkBuddy (CodeBuddy) marketplaces and the README plugin catalog are generated
+from it.
 """
 
 from __future__ import annotations
@@ -16,9 +17,9 @@ from urllib.parse import urlparse
 
 
 ROOT = Path(__file__).resolve().parents[1]
-MARKETPLACE_PATH = ROOT / ".agents" / "plugins" / "marketplace.json"
-CLAUDE_MARKETPLACE_PATH = ROOT / ".claude-plugin" / "marketplace.json"
-CLAUDE_MARKETPLACE_OWNER = "tadazly"
+MARKETPLACE_FILE = Path(".agents/plugins/marketplace.json")
+MARKETPLACE_PATH = ROOT / MARKETPLACE_FILE
+MARKETPLACE_OWNER = "tadazly"
 README_PATH = ROOT / "README.md"
 PLUGINS_PATH = ROOT / "plugins"
 CATALOG_HEADING = "## 插件目录"
@@ -212,10 +213,50 @@ def render_claude_marketplace(marketplace: dict[str, object]) -> dict[str, objec
     display_name = interface.get("displayName") if isinstance(interface, dict) else None
     return {
         "name": marketplace.get("name"),
-        "owner": {"name": CLAUDE_MARKETPLACE_OWNER},
+        "owner": {"name": MARKETPLACE_OWNER},
         "metadata": {"description": display_name},
         "plugins": plugins,
     }
+
+
+def render_codebuddy_marketplace(marketplace: dict[str, object]) -> dict[str, object]:
+    """Derive the WorkBuddy / CodeBuddy marketplace.
+
+    CodeBuddy follows the Claude Code plugin format, so entries reuse the Claude
+    mapping but keep only the fields CodeBuddy documents (description is required).
+    """
+    claude = render_claude_marketplace(marketplace)
+    fields = ("name", "description", "version", "author", "homepage", "category", "source")
+    return {
+        "name": claude["name"],
+        "owner": claude["owner"],
+        "description": claude["metadata"]["description"],
+        "plugins": [{field: plugin[field] for field in fields} for plugin in claude["plugins"]],
+    }
+
+
+# Marketplaces generated from the Codex marketplace, relative to the repository
+# root. Supporting another platform only needs a renderer and an entry here.
+GENERATED_MARKETPLACES = {
+    Path(".claude-plugin/marketplace.json"): render_claude_marketplace,
+    Path(".codebuddy-plugin/marketplace.json"): render_codebuddy_marketplace,
+}
+
+
+def generated_paths(root: Path) -> list[Path]:
+    return [root / relative for relative in GENERATED_MARKETPLACES] + [root / README_PATH.name]
+
+
+def render_generated_files(root: Path, marketplace: dict[str, object]) -> dict[Path, str]:
+    """Render every file derived from the Codex marketplace under ``root``."""
+    readme_path = root / README_PATH.name
+    readme = readme_path.read_text(encoding="utf-8")
+    outputs = {
+        root / relative: dump_json(render(marketplace))
+        for relative, render in GENERATED_MARKETPLACES.items()
+    }
+    outputs[readme_path] = replace_plugin_catalog(readme, render_plugin_catalog(marketplace))
+    return outputs
 
 
 def validate_plugin_display_metadata(
@@ -246,28 +287,24 @@ def validate_plugin_display_metadata(
         errors.append(f"{label}: interface.websiteURL must be a safe HTTPS URL")
 
 
-def validate_readme_catalog(marketplace: dict[str, object], errors: list[str]) -> None:
+def validate_generated_files(marketplace: dict[str, object], errors: list[str]) -> None:
     try:
-        readme = README_PATH.read_text(encoding="utf-8")
-        expected = replace_plugin_catalog(readme, render_plugin_catalog(marketplace))
-        if expected != readme:
-            errors.append("README plugin catalog is stale; run scripts/sync_generated.py")
+        outputs = render_generated_files(ROOT, marketplace)
     except (OSError, ValueError) as error:
-        errors.append(f"cannot validate README plugin catalog: {error}")
-
-
-def validate_claude_marketplace(marketplace: dict[str, object], errors: list[str]) -> None:
-    label = CLAUDE_MARKETPLACE_PATH.relative_to(ROOT).as_posix()
-    try:
-        current = CLAUDE_MARKETPLACE_PATH.read_text(encoding="utf-8")
-    except FileNotFoundError:
-        errors.append(f"missing file: {label}; run scripts/sync_generated.py")
+        errors.append(f"cannot render generated files: {error}")
         return
-    except OSError as error:
-        errors.append(f"cannot read {label}: {error}")
-        return
-    if current != dump_json(render_claude_marketplace(marketplace)):
-        errors.append(f"{label} is stale; run scripts/sync_generated.py")
+    for path, expected in outputs.items():
+        label = path.relative_to(ROOT).as_posix()
+        try:
+            current = path.read_text(encoding="utf-8")
+        except FileNotFoundError:
+            errors.append(f"missing file: {label}; run scripts/sync_generated.py")
+            continue
+        except OSError as error:
+            errors.append(f"cannot read {label}: {error}")
+            continue
+        if current != expected:
+            errors.append(f"{label} is stale; run scripts/sync_generated.py")
 
 
 def validate_claude_manifest(
@@ -444,8 +481,7 @@ def validate() -> list[str]:
     for name in sorted(actual_names - listed_names):
         errors.append(f"plugins/{name}: plugin directory is missing from marketplace.json")
 
-    validate_readme_catalog(marketplace, errors)
-    validate_claude_marketplace(marketplace, errors)
+    validate_generated_files(marketplace, errors)
 
     return errors
 

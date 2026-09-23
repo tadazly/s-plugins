@@ -37,9 +37,7 @@ class MarketplaceUpdateTests(unittest.TestCase):
             "long_description": "使用本地只读索引检索和分析游戏策划资料。",
             "developer_name": "tadazly",
             "website_url": "https://github.com/tadazly/design-rag",
-            "marketplace": validate_repo.MARKETPLACE_PATH,
-            "claude_marketplace": validate_repo.CLAUDE_MARKETPLACE_PATH,
-            "readme": validate_repo.README_PATH,
+            "root": validate_repo.ROOT,
         }
         values.update(overrides)
         return argparse.Namespace(**values)
@@ -205,28 +203,35 @@ class MarketplaceUpdateTests(unittest.TestCase):
         self.assertNotIn("ref", plugins[0]["source"])
         self.assertEqual("./plugins/local-tool", plugins[1]["source"])
 
-    def test_update_repository_regenerates_claude_marketplace(self) -> None:
+    def test_codebuddy_marketplace_uses_documented_fields_only(self) -> None:
+        self.register_plugin()
+        claude = validate_repo.render_claude_marketplace(self.marketplace)
+        codebuddy = validate_repo.render_codebuddy_marketplace(self.marketplace)
+        self.assertEqual("S Plugins", codebuddy["description"])
+        self.assertNotIn("metadata", codebuddy)
+        plugin = codebuddy["plugins"][0]
+        self.assertEqual(claude["plugins"][0]["source"], plugin["source"])
+        self.assertEqual("DRAG 本地游戏策划案与配置表检索、分析和索引管理工具", plugin["description"])
+        self.assertNotIn("displayName", plugin)
+
+    def test_update_repository_regenerates_every_marketplace(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            marketplace_path = root / "marketplace.json"
+            marketplace_path = root / validate_repo.MARKETPLACE_FILE
+            marketplace_path.parent.mkdir(parents=True)
             marketplace_path.write_text(validate_repo.dump_json(self.marketplace), encoding="utf-8")
-            readme_path = root / "README.md"
-            readme_path.write_text("# Title\n\n## 插件目录\n\n## 发布插件\n", encoding="utf-8")
-            claude_path = root / ".claude-plugin" / "marketplace.json"
-            args = self.release_args(
-                marketplace=marketplace_path,
-                readme=readme_path,
-                claude_marketplace=claude_path,
-            )
+            (root / "README.md").write_text("# Title\n\n## 插件目录\n\n## 发布插件\n", encoding="utf-8")
+            args = self.release_args(root=root)
             update_marketplace.validate_args(args)
 
             self.assertTrue(update_marketplace.update_repository(args))
             marketplace = json.loads(marketplace_path.read_text(encoding="utf-8"))
-            self.assertEqual(
-                validate_repo.dump_json(validate_repo.render_claude_marketplace(marketplace)),
-                claude_path.read_text(encoding="utf-8"),
-            )
-            self.assertIn("DRAG 游戏策划知识库", readme_path.read_text(encoding="utf-8"))
+            for relative, render in validate_repo.GENERATED_MARKETPLACES.items():
+                self.assertEqual(
+                    validate_repo.dump_json(render(marketplace)),
+                    (root / relative).read_text(encoding="utf-8"),
+                )
+            self.assertIn("DRAG 游戏策划知识库", (root / "README.md").read_text(encoding="utf-8"))
             self.assertFalse(update_marketplace.update_repository(args))
 
 

@@ -61,18 +61,14 @@ jobs:
       - name: Commit directly to main
         shell: bash
         run: |
-          if git diff --quiet -- \
-            .agents/plugins/marketplace.json \
-            .claude-plugin/marketplace.json \
-            README.md; then
+          mapfile -t files < <(python scripts/sync_generated.py --list-outputs)
+          files=(.agents/plugins/marketplace.json "${files[@]}")
+          if git diff --quiet -- "${files[@]}"; then
             echo "Marketplace already references ${PLUGIN_NAME}@${PLUGIN_VERSION} (${PLUGIN_REF})."
             exit 0
           fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add \
-            .agents/plugins/marketplace.json \
-            .claude-plugin/marketplace.json \
-            README.md
+          git add -- "${files[@]}"
           git commit -m "chore(marketplace): update ${PLUGIN_NAME} to ${PLUGIN_VERSION}"
           git push origin HEAD:main
