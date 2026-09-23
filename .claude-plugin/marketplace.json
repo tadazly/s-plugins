@@ -27,7 +27,7 @@
     {
       "name": "egret-agent-inspector",
       "displayName": "Egret Agent Inspector",
-      "version": "5.0.0",
+      "version": "5.0.1",
       "description": "读取和操作浏览器中 Egret 游戏的显示对象，支持 agent 驱动的 E2E 测试",
       "author": {
         "name": "tadazly"
@@ -38,7 +38,7 @@
         "source": "git-subdir",
         "url": "https://github.com/tadazly/egret-agent-inspector.git",
         "path": "plugins/egret-agent-inspector",
-        "ref": "v5.0.0"
+        "ref": "v5.0.1"
       }
     }
   ]
