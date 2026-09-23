@@ -31,6 +31,14 @@ codex plugin marketplace list
 
 运行 `/plugins` 浏览并安装插件；安装完成后新建 CLI 会话。
 
+更新已安装插件（桌面端与 CLI 共用同一份 Codex 配置，同样适用）：
+
+```powershell
+codex plugin marketplace upgrade s-plugins
+```
+
+该命令刷新市场快照，并把已安装插件更新到市场中的版本；之后新建任务或会话生效。
+
 ### Claude Code
 
 ```powershell
