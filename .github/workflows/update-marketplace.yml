@@ -39,7 +39,7 @@ jobs:
         with:
           python-version: "3.13"
 
-      - name: Update marketplace entry
+      - name: Update marketplace entries
         shell: bash
         run: >-
           python scripts/update_marketplace.py
@@ -55,7 +55,7 @@ jobs:
           --developer-name "$PLUGIN_DEVELOPER_NAME"
           --website-url "$PLUGIN_WEBSITE_URL"
 
-      - name: Validate marketplace
+      - name: Validate marketplaces
         run: python scripts/validate_repo.py
 
       - name: Commit directly to main
@@ -63,6 +63,7 @@ jobs:
         run: |
           if git diff --quiet -- \
             .agents/plugins/marketplace.json \
+            .claude-plugin/marketplace.json \
             README.md; then
             echo "Marketplace already references ${PLUGIN_NAME}@${PLUGIN_VERSION} (${PLUGIN_REF})."
             exit 0
@@ -71,6 +72,7 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add \
             .agents/plugins/marketplace.json \
+            .claude-plugin/marketplace.json \
             README.md
           git commit -m "chore(marketplace): update ${PLUGIN_NAME} to ${PLUGIN_VERSION}"
           git push origin HEAD:main

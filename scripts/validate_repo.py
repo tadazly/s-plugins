@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
-"""Validate the Codex plugin marketplace and its local plugin packages."""
+"""Validate the plugin marketplaces, derived files and local plugin packages.
+
+The Codex marketplace is the single source of truth; the Claude Code
+marketplace and the README plugin catalog are generated from it.
+"""
 
 from __future__ import annotations
 
@@ -13,6 +17,8 @@ from urllib.parse import urlparse
 
 ROOT = Path(__file__).resolve().parents[1]
 MARKETPLACE_PATH = ROOT / ".agents" / "plugins" / "marketplace.json"
+CLAUDE_MARKETPLACE_PATH = ROOT / ".claude-plugin" / "marketplace.json"
+CLAUDE_MARKETPLACE_OWNER = "tadazly"
 README_PATH = ROOT / "README.md"
 PLUGINS_PATH = ROOT / "plugins"
 CATALOG_HEADING = "## 插件目录"
@@ -136,6 +142,82 @@ def replace_plugin_catalog(readme: str, rendered_catalog: str) -> str:
     return readme[: match.start()] + replacement + readme[match.end() :]
 
 
+def dump_json(payload: object) -> str:
+    return json.dumps(payload, ensure_ascii=False, indent=2) + "\n"
+
+
+def write_text_if_changed(path: Path, content: str) -> bool:
+    try:
+        if path.read_text(encoding="utf-8") == content:
+            return False
+    except FileNotFoundError:
+        path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(content, encoding="utf-8", newline="\n")
+    return True
+
+
+def render_claude_source(source: object) -> str | dict[str, object] | None:
+    if not isinstance(source, dict):
+        return None
+    if source.get("source") == "local":
+        return source.get("path")
+    if source.get("source") != "git-subdir":
+        return None
+    # Claude Code rejects a leading "./" in git-subdir paths.
+    path = source.get("path")
+    rendered: dict[str, object] = {
+        "source": "git-subdir",
+        "url": source.get("url"),
+        "path": path.removeprefix("./") if isinstance(path, str) else path,
+    }
+    for selector in ("ref", "sha"):
+        if selector in source:
+            rendered[selector] = source[selector]
+    return rendered
+
+
+def render_claude_marketplace(marketplace: dict[str, object]) -> dict[str, object]:
+    """Derive the Claude Code marketplace, keeping only fields its schema knows."""
+    plugins: list[dict[str, object]] = []
+    entries = marketplace.get("plugins", [])
+    for entry in entries if isinstance(entries, list) else []:
+        if not isinstance(entry, dict):
+            continue
+        policy = entry.get("policy")
+        if isinstance(policy, dict) and policy.get("installation") == "NOT_AVAILABLE":
+            continue
+        source = render_claude_source(entry.get("source"))
+        if source is None:
+            continue
+        interface = entry.get("interface")
+        if not isinstance(interface, dict):
+            interface = {}
+        category = entry.get("category")
+        if isinstance(category, str):
+            category = "-".join(category.lower().split())
+        plugins.append(
+            {
+                "name": entry.get("name"),
+                "displayName": interface.get("displayName"),
+                "version": entry.get("version"),
+                "description": entry.get("description"),
+                "author": {"name": interface.get("developerName")},
+                "homepage": interface.get("websiteURL"),
+                "category": category,
+                "source": source,
+            }
+        )
+
+    interface = marketplace.get("interface")
+    display_name = interface.get("displayName") if isinstance(interface, dict) else None
+    return {
+        "name": marketplace.get("name"),
+        "owner": {"name": CLAUDE_MARKETPLACE_OWNER},
+        "metadata": {"description": display_name},
+        "plugins": plugins,
+    }
+
+
 def validate_plugin_display_metadata(
     entry: dict[str, object], label: str, errors: list[str]
 ) -> None:
@@ -169,9 +251,41 @@ def validate_readme_catalog(marketplace: dict[str, object], errors: list[str]) -
         readme = README_PATH.read_text(encoding="utf-8")
         expected = replace_plugin_catalog(readme, render_plugin_catalog(marketplace))
         if expected != readme:
-            errors.append("README plugin catalog is stale; run scripts/sync_readme.py")
+            errors.append("README plugin catalog is stale; run scripts/sync_generated.py")
     except (OSError, ValueError) as error:
         errors.append(f"cannot validate README plugin catalog: {error}")
+
+
+def validate_claude_marketplace(marketplace: dict[str, object], errors: list[str]) -> None:
+    label = CLAUDE_MARKETPLACE_PATH.relative_to(ROOT).as_posix()
+    try:
+        current = CLAUDE_MARKETPLACE_PATH.read_text(encoding="utf-8")
+    except FileNotFoundError:
+        errors.append(f"missing file: {label}; run scripts/sync_generated.py")
+        return
+    except OSError as error:
+        errors.append(f"cannot read {label}: {error}")
+        return
+    if current != dump_json(render_claude_marketplace(marketplace)):
+        errors.append(f"{label} is stale; run scripts/sync_generated.py")
+
+
+def validate_claude_manifest(
+    plugin_name: str, codex_version: Any, plugin_root: Path, errors: list[str]
+) -> None:
+    manifest_path = plugin_root / ".claude-plugin" / "plugin.json"
+    if not manifest_path.exists():
+        return
+    manifest = load_json(manifest_path, errors)
+    label = str(manifest_path.relative_to(ROOT))
+    if not isinstance(manifest, dict):
+        if manifest is not None:
+            errors.append(f"{label} must contain a JSON object")
+        return
+    if manifest.get("name") != plugin_name:
+        errors.append(f"{label}: name must be {plugin_name!r}")
+    if "version" in manifest and manifest["version"] != codex_version:
+        errors.append(f"{label}: version must match .codex-plugin/plugin.json")
 
 
 def validate_manifest(plugin_name: str, manifest_path: Path, errors: list[str]) -> None:
@@ -237,6 +351,8 @@ def validate_manifest(plugin_name: str, manifest_path: Path, errors: list[str]) 
             errors.append(f"{label}: string mcpServers must be './.mcp.json'")
         elif not (manifest_path.parents[1] / ".mcp.json").is_file():
             errors.append(f"{label}: declared mcpServers path does not exist")
+
+    validate_claude_manifest(plugin_name, version, manifest_path.parents[1], errors)
 
 
 def validate() -> list[str]:
@@ -329,6 +445,7 @@ def validate() -> list[str]:
         errors.append(f"plugins/{name}: plugin directory is missing from marketplace.json")
 
     validate_readme_catalog(marketplace, errors)
+    validate_claude_marketplace(marketplace, errors)
 
     return errors
 
@@ -336,11 +453,11 @@ def validate() -> list[str]:
 def main() -> int:
     errors = validate()
     if errors:
-        print("Codex plugin repository validation failed:", file=sys.stderr)
+        print("Plugin repository validation failed:", file=sys.stderr)
         for error in errors:
             print(f"- {error}", file=sys.stderr)
         return 1
-    print("Codex plugin repository validation passed.")
+    print("Plugin repository validation passed.")
     return 0
 
 

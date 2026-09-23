@@ -31,6 +31,24 @@ codex plugin marketplace list
 
 运行 `/plugins` 浏览并安装插件；安装完成后新建 CLI 会话。
 
+### Claude Code
+
+```powershell
+claude plugin marketplace add tadazly/s-plugins
+claude plugin install design-rag@s-plugins
+```
+
+也可以在会话中运行 `/plugin marketplace add tadazly/s-plugins`，再到 `/plugin` 的 **Discover** 页浏览安装。安装完成后新建会话；已打开的会话可运行 `/reload-plugins`。
+
+第三方市场默认不自动更新，更新已安装插件：
+
+```powershell
+claude plugin marketplace update s-plugins
+claude plugin update design-rag@s-plugins
+```
+
+也可以在 `/plugin` → **Marketplaces** 中为 `s-plugins` 开启自动更新。
+
 ## 插件目录
 
 | 插件 | 简介 |
@@ -47,8 +65,8 @@ codex plugin marketplace list
 ```text
 上游发布成功
   → repository_dispatch
-  → 更新 marketplace.json
-  → 重建 README 插件目录
+  → 更新 .agents/plugins/marketplace.json
+  → 生成 .claude-plugin/marketplace.json 与 README 插件目录
   → 静态校验
   → github-actions[bot] 提交 main
 ```
@@ -62,14 +80,16 @@ codex plugin marketplace list
 | `source.ref` | 必填 | 必填 | 已发布的 Git tag 或 ref |
 | `source.url` | 必填 | 可省略 | 插件仓库 HTTPS URL；登记后不可由通知修改 |
 | `source.path` | 必填 | 可省略 | 插件目录，以 `./` 开头；登记后不可由通知修改 |
-| `description` | 必填 | 可选 | 插件包说明 |
-| `interface.displayName` | 必填 | 可选 | Codex 与 README 中显示的名称 |
+| `description` | 必填 | 可选 | 插件包说明，Codex 与 Claude Code 共用 |
+| `interface.displayName` | 必填 | 可选 | Codex、Claude Code 与 README 中显示的名称 |
 | `interface.shortDescription` | 必填 | 可选 | Codex 与 README 中显示的简短说明 |
 | `interface.longDescription` | 必填 | 可选 | 插件详情中的完整说明 |
-| `interface.developerName` | 必填 | 可选 | 开发者名称 |
-| `interface.websiteURL` | 必填 | 可选 | 插件网站或仓库的 HTTPS URL |
+| `interface.developerName` | 必填 | 可选 | 开发者名称，Claude Code 中为 `author.name` |
+| `interface.websiteURL` | 必填 | 可选 | 插件网站或仓库的 HTTPS URL，Claude Code 中为 `homepage` |
 
 `policy.installation`、`policy.authentication` 和 `category` 由本仓库管理，不接受发布通知覆盖。首次登记必须提供全部参数；后续发布至少提供 `name`、`version` 和 `source.ref`，其他字段仅在传入时更新。
+
+Claude Code marketplace 不单独接收通知，由同一次更新从 Codex 条目生成：只保留 Claude Code schema 支持的字段，`source.path` 去掉 `./` 前缀，`policy.installation` 为 `NOT_AVAILABLE` 的插件不列出。
 
 **可省略参数不可变更**，确需迁移来源时，应在本仓库中人工修改并审核，而不是通过普通版本发布通知变更。
 
@@ -114,6 +134,15 @@ codex plugin marketplace list
 ```
 
 如果展示信息发生变化，在后续 payload 中附带变化的 `description` 或 `interface` 字段即可。
+
+#### 支持 Claude Code
+
+发布通知无需额外字段。要让插件在 Claude Code 中可用，发布的 tag 需满足：
+
+- 插件目录包含 `.claude-plugin/plugin.json`，`name`、`version` 与 `.codex-plugin/plugin.json` 一致。marketplace 条目的 `version` 决定 Claude Code 的缓存目录和更新判断。
+- MCP server 在 `.claude-plugin/plugin.json` 中内联声明，`command` 和 `args` 使用 `${CLAUDE_PLUGIN_ROOT}` 定位插件文件。
+- Claude Code 也会加载插件根目录的 `.mcp.json`：其中相对路径按用户会话目录解析，`cwd` 不生效；同名 server 以 `plugin.json` 的内联声明为准。因此要么内联声明覆盖 `.mcp.json` 中的全部 server，要么将 Codex 配置改名（如 `.codex-mcp.json`），并在 `.codex-plugin/plugin.json` 的 `mcpServers` 中引用。
+- `skills/` 两端通用，无需改动。
 
 #### 发布仓库发送通知
 
@@ -160,7 +189,7 @@ codex plugin marketplace list
 #### 给发布仓库 Agent 的提示词
 
 ```text
-当前插件发布成功后，向 tadazly/s-plugins 发送 plugin-released repository_dispatch。首次登记从插件 manifest 读取 name、version、description 和 interface 展示信息，并附带 source.url、source.path、source.ref；后续至少发送 name、version、source.ref，展示信息变化时再附带相应字段。使用仓库 Secret S_PLUGINS_DISPATCH_TOKEN，只有 tag 和 release 成功后才通知，禁止输出或提交 Token。按 https://github.com/tadazly/s-plugins/blob/main/README.md 的“从其他仓库自动发布”协议实施并验证。
+当前插件发布成功后，向 tadazly/s-plugins 发送 plugin-released repository_dispatch。首次登记从插件 manifest 读取 name、version、description 和 interface 展示信息，并附带 source.url、source.path、source.ref；后续至少发送 name、version、source.ref，展示信息变化时再附带相应字段。使用仓库 Secret S_PLUGINS_DISPATCH_TOKEN，只有 tag 和 release 成功后才通知，禁止输出或提交 Token。插件支持 Claude Code 时，按“支持 Claude Code”要求在 tag 中提供 .claude-plugin/plugin.json，并在发布校验中确认其 version 与 Codex manifest 一致。按 https://github.com/tadazly/s-plugins/blob/main/README.md 的“从其他仓库自动发布”协议实施并验证。
 ```
 
 ### 在本仓库添加插件
@@ -169,33 +198,40 @@ codex plugin marketplace list
 
 1. 使用 Codex 内置 `$plugin-creator` 创建插件及 `local` marketplace 条目。
 2. 将 manifest 的 `version`、`description` 和 `interface` 展示字段同步到 marketplace 条目。
-3. 运行 `python scripts/sync_readme.py` 更新插件目录。
-4. 使用 `plugin-creator` validator 验证插件，再运行本仓库检查。
+3. 需要支持 Claude Code 时，按“支持 Claude Code”补充 `.claude-plugin/plugin.json`。
+4. 运行 `python scripts/sync_generated.py` 更新 Claude Code marketplace 与插件目录。
+5. 使用 `plugin-creator` validator 验证插件，Claude Code 插件再运行 `claude plugin validate plugins/<plugin-name>`，最后运行本仓库检查。
 
 每个本地插件必须包含 `.codex-plugin/plugin.json`；`skills/`、`hooks/`、`assets/`、`.mcp.json` 和 `.app.json` 均位于插件根目录。
 
 ## 开发与验证
 
 ```powershell
-python scripts/sync_readme.py
+python scripts/sync_generated.py
 python scripts/validate_repo.py
 python -m unittest discover -s tests -v
+claude plugin validate .
 ```
 
 本地调试 marketplace：
 
 ```powershell
 codex plugin marketplace add .
+claude plugin marketplace add .
 ```
 
 关键文件：
 
 - `.agents/plugins/marketplace.json`：插件来源、安装策略和展示信息的唯一数据源。
-- `scripts/update_marketplace.py`：处理发布通知并更新 README。
-- `scripts/sync_readme.py`：重建 README 插件目录。
+- `.claude-plugin/marketplace.json`：Claude Code marketplace，由脚本生成，不手工编辑。
+- `scripts/update_marketplace.py`：处理发布通知，更新两份 marketplace 与 README。
+- `scripts/sync_generated.py`：重建 Claude Code marketplace 与 README 插件目录。
 - `.github/workflows/update-marketplace.yml`：自动更新并提交。
 
 ## 参考
 
 - [OpenAI：使用和安装插件](https://learn.chatgpt.com/zh-Hans/docs/plugins)
 - [OpenAI：Package your plugin](https://developers.openai.com/plugins/build/plugins)
+- [Claude Code：Discover and install plugins](https://code.claude.com/docs/en/discover-plugins)
+- [Claude Code：Create and distribute a plugin marketplace](https://code.claude.com/docs/en/plugin-marketplaces)
+- [Claude Code：Plugins reference](https://code.claude.com/docs/en/plugins-reference)

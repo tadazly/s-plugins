@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Apply a trusted plugin release notification to the marketplace and README."""
+"""Apply a trusted plugin release notification to both marketplaces and README."""
 
 from __future__ import annotations
 
@@ -8,16 +8,20 @@ import json
 from pathlib import Path
 
 from validate_repo import (
+    CLAUDE_MARKETPLACE_PATH,
     MARKETPLACE_PATH,
     PLUGIN_NAME_RE,
     README_PATH,
     SEMVER_RE,
+    dump_json,
     non_empty_string,
+    render_claude_marketplace,
     render_plugin_catalog,
     replace_plugin_catalog,
     valid_git_ref,
     valid_https_url,
     valid_relative_plugin_path,
+    write_text_if_changed,
 )
 
 
@@ -47,6 +51,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--developer-name")
     parser.add_argument("--website-url")
     parser.add_argument("--marketplace", type=Path, default=MARKETPLACE_PATH)
+    parser.add_argument("--claude-marketplace", type=Path, default=CLAUDE_MARKETPLACE_PATH)
     parser.add_argument("--readme", type=Path, default=README_PATH)
     return parser.parse_args()
 
@@ -184,21 +189,14 @@ def update_repository(args: argparse.Namespace) -> bool:
     marketplace = load_object(marketplace_path, "marketplace.json")
     readme = readme_path.read_text(encoding="utf-8")
 
-    changed = upsert_release(marketplace, args)
-    rendered_catalog = render_plugin_catalog(marketplace)
-    updated_readme = replace_plugin_catalog(readme, rendered_catalog)
-
-    marketplace_content = json.dumps(marketplace, ensure_ascii=False, indent=2) + "\n"
-    file_changed = (
-        marketplace_content != marketplace_path.read_text(encoding="utf-8")
-        or updated_readme != readme
-    )
-    if not changed and not file_changed:
-        return False
-
-    marketplace_path.write_text(marketplace_content, encoding="utf-8")
-    readme_path.write_text(updated_readme, encoding="utf-8")
-    return True
+    upsert_release(marketplace, args)
+    outputs = {
+        marketplace_path: dump_json(marketplace),
+        args.claude_marketplace.resolve(): dump_json(render_claude_marketplace(marketplace)),
+        readme_path: replace_plugin_catalog(readme, render_plugin_catalog(marketplace)),
+    }
+    written = [write_text_if_changed(path, content) for path, content in outputs.items()]
+    return any(written)
 
 
 def main() -> int:
@@ -210,7 +208,7 @@ def main() -> int:
         raise SystemExit(f"plugin release update failed: {error}") from error
 
     state = "updated" if changed else "already current"
-    print(f"{args.name}@{args.version} ({args.ref}): marketplace and README {state}.")
+    print(f"{args.name}@{args.version} ({args.ref}): marketplaces and README {state}.")
     return 0
 
 

@@ -1,4 +1,4 @@
-name: Validate Codex plugins
+name: Validate plugin marketplaces
 
 on:
   push:

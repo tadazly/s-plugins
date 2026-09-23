@@ -1,7 +1,10 @@
 from __future__ import annotations
 
 import argparse
+import copy
+import json
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -35,6 +38,7 @@ class MarketplaceUpdateTests(unittest.TestCase):
             "developer_name": "tadazly",
             "website_url": "https://github.com/tadazly/design-rag",
             "marketplace": validate_repo.MARKETPLACE_PATH,
+            "claude_marketplace": validate_repo.CLAUDE_MARKETPLACE_PATH,
             "readme": validate_repo.README_PATH,
         }
         values.update(overrides)
@@ -157,6 +161,73 @@ class MarketplaceUpdateTests(unittest.TestCase):
             "A &lt;tag&gt; &amp; \\[label\\] \\| \\`code\\`",
             rendered,
         )
+
+    def test_claude_marketplace_keeps_only_claude_schema_fields(self) -> None:
+        self.register_plugin()
+        claude = validate_repo.render_claude_marketplace(self.marketplace)
+        self.assertEqual("s-plugins", claude["name"])
+        self.assertEqual({"name": "tadazly"}, claude["owner"])
+        self.assertNotIn("interface", claude)
+        plugin = claude["plugins"][0]
+        self.assertEqual(
+            {
+                "source": "git-subdir",
+                "url": "https://github.com/tadazly/design-rag.git",
+                "path": "plugins/design-rag",
+                "ref": "v0.3.0",
+            },
+            plugin["source"],
+        )
+        self.assertEqual("0.3.0", plugin["version"])
+        self.assertEqual("DRAG 游戏策划知识库", plugin["displayName"])
+        self.assertEqual({"name": "tadazly"}, plugin["author"])
+        self.assertEqual("https://github.com/tadazly/design-rag", plugin["homepage"])
+        self.assertEqual("productivity", plugin["category"])
+        self.assertNotIn("policy", plugin)
+        self.assertNotIn("interface", plugin)
+
+    def test_claude_marketplace_maps_sha_local_and_unavailable_entries(self) -> None:
+        self.register_plugin()
+        released = self.marketplace["plugins"][0]
+        del released["source"]["ref"]
+        released["source"]["sha"] = "a" * 40
+        hidden = copy.deepcopy(released)
+        hidden["name"] = "hidden-tool"
+        hidden["policy"]["installation"] = "NOT_AVAILABLE"
+        local = copy.deepcopy(released)
+        local["name"] = "local-tool"
+        local["source"] = {"source": "local", "path": "./plugins/local-tool"}
+        self.marketplace["plugins"].extend([hidden, local])
+
+        plugins = validate_repo.render_claude_marketplace(self.marketplace)["plugins"]
+        self.assertEqual(["design-rag", "local-tool"], [plugin["name"] for plugin in plugins])
+        self.assertEqual("a" * 40, plugins[0]["source"]["sha"])
+        self.assertNotIn("ref", plugins[0]["source"])
+        self.assertEqual("./plugins/local-tool", plugins[1]["source"])
+
+    def test_update_repository_regenerates_claude_marketplace(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            marketplace_path = root / "marketplace.json"
+            marketplace_path.write_text(validate_repo.dump_json(self.marketplace), encoding="utf-8")
+            readme_path = root / "README.md"
+            readme_path.write_text("# Title\n\n## 插件目录\n\n## 发布插件\n", encoding="utf-8")
+            claude_path = root / ".claude-plugin" / "marketplace.json"
+            args = self.release_args(
+                marketplace=marketplace_path,
+                readme=readme_path,
+                claude_marketplace=claude_path,
+            )
+            update_marketplace.validate_args(args)
+
+            self.assertTrue(update_marketplace.update_repository(args))
+            marketplace = json.loads(marketplace_path.read_text(encoding="utf-8"))
+            self.assertEqual(
+                validate_repo.dump_json(validate_repo.render_claude_marketplace(marketplace)),
+                claude_path.read_text(encoding="utf-8"),
+            )
+            self.assertIn("DRAG 游戏策划知识库", readme_path.read_text(encoding="utf-8"))
+            self.assertFalse(update_marketplace.update_repository(args))
 
 
 if __name__ == "__main__":
