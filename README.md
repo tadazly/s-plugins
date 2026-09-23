@@ -69,6 +69,8 @@ WorkBuddy 使用 CodeBuddy 插件体系，读取本仓库的 `.codebuddy-plugin/
 
 ## 发布插件
 
+新插件建议从 [plugin-template](https://github.com/tadazly/plugin-template) 创建。模板内置三端清单生成与校验、agent 制作与发布技能，以及发布后通知本仓库的 CI/CD；按模板说明配置 `S_PLUGINS_DISPATCH_TOKEN` 即可接入。
+
 ### 从其他仓库自动发布
 
 插件仓库完成构建、测试、tag 和发布后，向本仓库发送 `plugin-released` 类型的 `repository_dispatch`：
