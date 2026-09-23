@@ -6,13 +6,13 @@
   "plugins": [
     {
       "name": "design-rag",
-      "version": "0.3.3",
+      "version": "0.4.0",
       "description": "DRAG 本地游戏策划案与配置表检索、分析和索引管理工具",
       "source": {
         "source": "git-subdir",
         "url": "https://github.com/tadazly/design-rag.git",
         "path": "./plugins/design-rag",
-        "ref": "v0.3.3"
+        "ref": "v0.4.0"
       },
       "policy": {
         "installation": "AVAILABLE",
