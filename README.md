@@ -59,7 +59,7 @@ claude plugin update design-rag@s-plugins
 
 ### WorkBuddy
 
-> WorkBuddy 端尚未验收。
+> WorkBuddy 5.6.2 已实测添加市场和安装插件。插件的 MCP 能否使用，取决于它是否满足下文「支持 Claude Code 与 WorkBuddy」的要求，冒烟测试会逐个检查。
 
 WorkBuddy 使用 CodeBuddy 插件体系，读取本仓库的 `.codebuddy-plugin/marketplace.json`。在插件市场中添加 Git 市场 `https://github.com/tadazly/s-plugins.git`；使用 CodeBuddy Code CLI 时：
 
@@ -158,12 +158,25 @@ Claude Code 与 WorkBuddy marketplace 不单独接收通知，由同一次更新
 
 #### 支持 Claude Code 与 WorkBuddy
 
-发布通知无需额外字段。WorkBuddy 使用的 CodeBuddy 插件体系兼容 Claude Code 插件规范，识别 `.claude-plugin/plugin.json` 与 `${CLAUDE_PLUGIN_ROOT}`，因此两端共用一份清单。发布的 tag 需满足：
+发布通知无需额外字段。三个客户端各自读取插件清单：
+- Codex 读 `.codex-plugin/plugin.json`；
+- Claude Code 读 `.claude-plugin/plugin.json`；
+- WorkBuddy 按 `.codebuddy-plugin` → `.workbuddy-plugin` → `.claude-plugin` 的顺序，只读第一个找到的 `plugin.json`。
 
-- 插件目录包含 `.claude-plugin/plugin.json`，`name`、`version` 与 `.codex-plugin/plugin.json` 一致。marketplace 条目的 `version` 决定 Claude Code 的缓存目录和更新判断。
-- MCP server 在 `.claude-plugin/plugin.json` 中内联声明，`command` 和 `args` 使用 `${CLAUDE_PLUGIN_ROOT}` 定位插件文件。
-- Claude Code 与 WorkBuddy 也会加载插件根目录的 `.mcp.json`：Claude Code 中其相对路径按用户会话目录解析、`cwd` 不生效，同名 server 以 `plugin.json` 的内联声明为准。因此将 Codex 配置改名（如 `.codex-mcp.json`），并在 `.codex-plugin/plugin.json` 的 `mcpServers` 中引用。
-- `skills/` 两端通用，无需改动。
+发布的 tag 需满足：
+
+- 插件目录包含 `.claude-plugin/plugin.json`，其 `name`、`version` 与 `.codex-plugin/plugin.json` 一致。marketplace 条目的 `version` 决定 Claude Code 的缓存目录和更新判断。
+- 建议再提供 `.codebuddy-plugin/plugin.json`，这是 WorkBuddy 内置插件的写法；缺少时 WorkBuddy 会退回读取 `.claude-plugin/plugin.json`。
+- MCP server 在清单中内联声明。Claude Code 与 WorkBuddy 都在用户的会话或工作区目录启动 server，不支持 `cwd`，也不改写相对路径。所以 `command` 和 `args` 要用 `${CLAUDE_PLUGIN_ROOT}`（WorkBuddy 清单用 `${CODEBUDDY_PLUGIN_ROOT}`）定位插件文件。
+- 插件根目录不放 `.mcp.json` 和 `mcp/*.json`：
+  - Claude Code 与 WorkBuddy 都会自动加载它们；
+  - WorkBuddy 依次合并清单、`.mcp.json`、`mcp/*.json`，同名 server 以后读到的为准。Codex 写法的 `.mcp.json` 会覆盖清单里的配置，导致启动失败。
+  - Codex 配置请改名（如 `.codex-mcp.json`），并在 `.codex-plugin/plugin.json` 的 `mcpServers` 中引用。
+- MCP 启动命令不要按名字调用 `python`、`python3`、`py`，Claude Code 与 WorkBuddy 侧也不要依赖 `node`。解释型 server 要用启动器，由启动器按平台选择解释器。
+- 审批、超时、`enabled` 等字段只有 Codex 读取，WorkBuddy 下发配置时会丢弃，所以危险操作不能只靠客户端审批拦截。
+- `skills/` 三端通用。
+
+[plugin-template](https://github.com/tadazly/plugin-template) 已按这些规则生成各端清单，并在 CI 中用三端 CLI 校验；详细的踩坑记录见该仓库 `.agents/skills/plugin-create/references/mcp.md`。冒烟测试会用 `scripts/plugin_compat.py`，按各客户端的加载规则检查每个已发布插件的 MCP 启动配置。
 
 #### 发布仓库发送通知
 
@@ -210,7 +223,7 @@ Claude Code 与 WorkBuddy marketplace 不单独接收通知，由同一次更新
 #### 给发布仓库 Agent 的提示词
 
 ```text
-当前插件发布成功后，向 tadazly/s-plugins 发送 plugin-released repository_dispatch。首次登记从插件 manifest 读取 name、version、description 和 interface 展示信息，并附带 source.url、source.path、source.ref；后续至少发送 name、version、source.ref，展示信息变化时再附带相应字段。使用仓库 Secret S_PLUGINS_DISPATCH_TOKEN，只有 tag 和 release 成功后才通知，禁止输出或提交 Token。插件支持 Claude Code 时，按“支持 Claude Code”要求在 tag 中提供 .claude-plugin/plugin.json，并在发布校验中确认其 version 与 Codex manifest 一致。按 https://github.com/tadazly/s-plugins/blob/main/README.md 的“从其他仓库自动发布”协议实施并验证。
+当前插件发布成功后，向 tadazly/s-plugins 发送 plugin-released repository_dispatch。首次登记从插件 manifest 读取 name、version、description 和 interface 展示信息，并附带 source.url、source.path、source.ref；后续至少发送 name、version、source.ref，展示信息变化时再附带相应字段。使用仓库 Secret S_PLUGINS_DISPATCH_TOKEN，只有 tag 和 release 成功后才通知，禁止输出或提交 Token。插件支持 Claude Code 与 WorkBuddy 时，按“支持 Claude Code 与 WorkBuddy”要求在 tag 中提供 .claude-plugin/plugin.json（建议再提供 .codebuddy-plugin/plugin.json），插件根目录不放 .mcp.json 与 mcp/*.json，并在发布校验中确认各清单的 version 与 Codex manifest 一致。按 https://github.com/tadazly/s-plugins/blob/main/README.md 的“从其他仓库自动发布”协议实施并验证。
 ```
 
 ### 在本仓库添加插件
@@ -219,11 +232,11 @@ Claude Code 与 WorkBuddy marketplace 不单独接收通知，由同一次更新
 
 1. 使用 Codex 内置 `$plugin-creator` 创建插件及 `local` marketplace 条目。
 2. 将 manifest 的 `version`、`description` 和 `interface` 展示字段同步到 marketplace 条目。
-3. 需要支持 Claude Code 时，按“支持 Claude Code”补充 `.claude-plugin/plugin.json`。
+3. 需要支持 Claude Code 与 WorkBuddy 时，按“支持 Claude Code 与 WorkBuddy”补充 `.claude-plugin/plugin.json` 与 `.codebuddy-plugin/plugin.json`；Codex 的 MCP 配置使用 `.codex-mcp.json`。
 4. 运行 `python scripts/sync_generated.py` 更新 Claude Code marketplace 与插件目录。
-5. 使用 `plugin-creator` validator 验证插件，Claude Code 插件再运行 `claude plugin validate plugins/<plugin-name>`，最后运行本仓库检查。
+5. 使用 `plugin-creator` validator 验证插件，再分别运行 `claude plugin validate plugins/<plugin-name>` 与 `codebuddy plugin validate plugins/<plugin-name>`，最后运行本仓库检查。
 
-每个本地插件必须包含 `.codex-plugin/plugin.json`；`skills/`、`hooks/`、`assets/`、`.mcp.json` 和 `.app.json` 均位于插件根目录。
+每个本地插件必须包含 `.codex-plugin/plugin.json`；`skills/`、`hooks/`、`assets/`、MCP 配置和 `.app.json` 均位于插件根目录，但根目录不放 `.mcp.json` 与 `mcp/*.json`。
 
 ## 开发与验证
 
@@ -232,6 +245,7 @@ python scripts/sync_generated.py
 python scripts/validate_repo.py
 python -m unittest discover -s tests -v
 claude plugin validate .
+codebuddy plugin validate .   # 装有 CodeBuddy CLI 时运行，先退出 WorkBuddy
 ```
 
 本地调试 marketplace：
@@ -249,7 +263,8 @@ claude plugin marketplace add .
 - `scripts/update_marketplace.py`：处理发布通知，更新全部 marketplace 与 README。
 - `scripts/sync_generated.py`：重建全部生成文件；`--list-outputs` 列出生成文件，供 workflow 提交。
 - `.github/workflows/update-marketplace.yml`：自动更新并提交。
-- `.github/workflows/smoke.yml`：用真实 Claude Code CLI 安装全部插件，只报告不阻断。
+- `.github/workflows/smoke.yml`：用真实的 Claude Code 与 CodeBuddy Code CLI 安装全部插件，并按三端规则检查 MCP 启动配置；只报告，不阻断发布。
+- `scripts/plugin_compat.py`：按 Codex、Claude Code 与 WorkBuddy 的加载规则，检查插件目录里各 MCP server 实际生效的启动配置。
 
 ## 参考
 

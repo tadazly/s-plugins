@@ -1,8 +1,9 @@
-name: Claude Code install smoke test
+name: Plugin install smoke test
 
-# Installs every plugin with the real Claude Code CLI to catch unresolvable
-# sources (missing tags, wrong paths, broken manifests). It only reports and
-# never blocks marketplace updates.
+# Installs every plugin with the real Claude Code and CodeBuddy Code (WorkBuddy)
+# CLIs to catch unresolvable sources and broken manifests, then checks how each
+# client would start the plugins' MCP servers. It only reports and never blocks
+# marketplace updates.
 on:
   workflow_dispatch:
   schedule:
@@ -18,7 +19,9 @@ on:
     paths:
       - .agents/plugins/marketplace.json
       - .claude-plugin/marketplace.json
+      - .codebuddy-plugin/marketplace.json
       - .github/workflows/smoke.yml
+      - scripts/plugin_compat.py
 
 permissions:
   contents: read
@@ -54,3 +57,39 @@ jobs:
             claude plugin install "${plugin}@s-plugins"
             claude plugin details "${plugin}@s-plugins"
           done
+
+  workbuddy:
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    env:
+      CODEBUDDY_CONFIG_DIR: ${{ github.workspace }}/../codebuddy-home
+    steps:
+      - name: Check out marketplace
+        uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install CodeBuddy Code
+        run: |
+          npm install --global @tencent-ai/codebuddy-code
+          mkdir -p "$CODEBUDDY_CONFIG_DIR"
+
+      - name: Validate WorkBuddy marketplace
+        run: codebuddy plugin validate .
+
+      - name: Install every plugin
+        shell: bash
+        run: |
+          codebuddy plugin marketplace add "$GITHUB_WORKSPACE"
+          for plugin in $(jq -r '.plugins[].name' .codebuddy-plugin/marketplace.json); do
+            codebuddy plugin install "${plugin}@s-plugins"
+          done
+
+      - name: Check how each client starts MCP servers
+        shell: bash
+        run: python3 scripts/plugin_compat.py "$CODEBUDDY_CONFIG_DIR"/plugins/cache/s-plugins/*/*

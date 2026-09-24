@@ -15,6 +15,8 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
 
+import plugin_compat
+
 
 ROOT = Path(__file__).resolve().parents[1]
 MARKETPLACE_FILE = Path(".agents/plugins/marketplace.json")
@@ -307,22 +309,26 @@ def validate_generated_files(marketplace: dict[str, object], errors: list[str]) 
             errors.append(f"{label} is stale; run scripts/sync_generated.py")
 
 
-def validate_claude_manifest(
+def validate_client_manifests(
     plugin_name: str, codex_version: Any, plugin_root: Path, errors: list[str]
 ) -> None:
-    manifest_path = plugin_root / ".claude-plugin" / "plugin.json"
-    if not manifest_path.exists():
-        return
-    manifest = load_json(manifest_path, errors)
-    label = str(manifest_path.relative_to(ROOT))
-    if not isinstance(manifest, dict):
-        if manifest is not None:
-            errors.append(f"{label} must contain a JSON object")
-        return
-    if manifest.get("name") != plugin_name:
-        errors.append(f"{label}: name must be {plugin_name!r}")
-    if "version" in manifest and manifest["version"] != codex_version:
-        errors.append(f"{label}: version must match .codex-plugin/plugin.json")
+    """Claude Code and WorkBuddy manifests must match the Codex manifest."""
+    for directory in (".claude-plugin", ".codebuddy-plugin"):
+        manifest_path = plugin_root / directory / "plugin.json"
+        if not manifest_path.exists():
+            continue
+        manifest = load_json(manifest_path, errors)
+        label = manifest_path.relative_to(ROOT).as_posix()
+        if not isinstance(manifest, dict):
+            if manifest is not None:
+                errors.append(f"{label} must contain a JSON object")
+            continue
+        if manifest.get("name") != plugin_name:
+            errors.append(f"{label}: name must be {plugin_name!r}")
+        if "version" in manifest and manifest["version"] != codex_version:
+            errors.append(f"{label}: version must match .codex-plugin/plugin.json")
+    compat_errors, _ = plugin_compat.check_plugin(plugin_root)
+    errors.extend(f"{plugin_root.relative_to(ROOT).as_posix()}: {message}" for message in compat_errors)
 
 
 def validate_manifest(plugin_name: str, manifest_path: Path, errors: list[str]) -> None:
@@ -382,14 +388,22 @@ def validate_manifest(plugin_name: str, manifest_path: Path, errors: list[str]) 
         if field in manifest and not (manifest_path.parents[1] / expected).exists():
             errors.append(f"{label}: declared {field} path does not exist")
 
+    plugin_root = manifest_path.parents[1]
     mcp_servers = manifest.get("mcpServers")
     if isinstance(mcp_servers, str):
-        if mcp_servers != "./.mcp.json":
-            errors.append(f"{label}: string mcpServers must be './.mcp.json'")
-        elif not (manifest_path.parents[1] / ".mcp.json").is_file():
+        if not valid_relative_plugin_path(mcp_servers) or not mcp_servers.endswith(".json"):
+            errors.append(f"{label}: string mcpServers must be a './'-relative JSON file")
+        elif not (plugin_root / mcp_servers).is_file():
             errors.append(f"{label}: declared mcpServers path does not exist")
+    for path in (plugin_root / ".mcp.json", *sorted((plugin_root / "mcp").glob("*.json"))):
+        if path.is_file():
+            errors.append(
+                f"{path.relative_to(ROOT).as_posix()}: Claude Code and WorkBuddy load this file automatically "
+                "and WorkBuddy lets it override manifest servers; keep the Codex MCP config in a file such as "
+                "'./.codex-mcp.json'"
+            )
 
-    validate_claude_manifest(plugin_name, version, manifest_path.parents[1], errors)
+    validate_client_manifests(plugin_name, version, plugin_root, errors)
 
 
 def validate() -> list[str]:
