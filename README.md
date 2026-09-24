@@ -59,9 +59,21 @@ claude plugin update design-rag@s-plugins
 
 ### WorkBuddy
 
-> WorkBuddy 5.6.2 已实测添加市场和安装插件。插件的 MCP 能否使用，取决于它是否满足下文「支持 Claude Code 与 WorkBuddy」的要求，冒烟测试会逐个检查。
+> 以下为 WorkBuddy 5.6.2 真实截图，界面可能随版本变化。
 
-WorkBuddy 使用 CodeBuddy 插件体系，读取本仓库的 `.codebuddy-plugin/marketplace.json`。在插件市场中添加 Git 市场 `https://github.com/tadazly/s-plugins.git`；使用 CodeBuddy Code CLI 时：
+1. 切换到 **技能 -> 套件** 标签，点击市场列表右侧的 **+**。
+
+   <img src="docs/assets/workbuddy/plugin-add-marketplace.png" alt="在 WorkBuddy 套件页添加市场" width="380">
+
+2. 在 **市场源** 中填写 `tadazly/s-plugins`，点击 **提交**。
+
+   <img src="docs/assets/workbuddy/plugin-add-marketplace-detail.png" alt="在 WorkBuddy 中填写 S Plugins 市场源" width="480">
+
+3. 在市场列表中选择 **s-plugins**，点击要安装插件卡片右上角的 **+**。
+
+   <img src="docs/assets/workbuddy/plugin-add-plugin.png" alt="在 WorkBuddy 中安装 S Plugins 的插件" width="320">
+
+使用 CodeBuddy Code CLI 时：
 
 ```text
 /plugin marketplace add tadazly/s-plugins
